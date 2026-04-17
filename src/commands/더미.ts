@@ -42,6 +42,7 @@ module.exports = {
           where: { nickname: d.nickname },
           update: {}, 
           create: {
+            discordId: "bot_" + d.nickname,
             nickname: d.nickname,
             score: d.score,
             wins: 0,
@@ -63,6 +64,7 @@ module.exports = {
     }
 
     const dummiesToAdd = dbDummies.slice(0, spaceLeft).map(p => ({
+      discordId: p.discordId,
       nickname: p.nickname,
       score: p.score
     }));

@@ -50,7 +50,7 @@ export const addPlayerManualCommand = {
       return interaction.reply({ content: `❌ **${inputName}** 선수가 DB에 없습니다.`, ephemeral: true });
     }
 
-    session.players.push({ nickname: player.nickname, score: player.score });
+    session.players.push({ discordId: player.discordId, nickname: player.nickname, score: player.score });
 
     if (session.players.length === 10) {
       session.phase = 'selecting';
@@ -230,7 +230,7 @@ export const changePlayerCommand = {
       return interaction.reply({ content: `❌ **${inName}** 선수는 이미 참가 중입니다.`, ephemeral: true });
     }
 
-    session.players[outIdx] = { nickname: newPlayer.nickname, score: newPlayer.score };
+    session.players[outIdx] = { discordId: newPlayer.discordId, nickname: newPlayer.nickname, score: newPlayer.score };
     session.phase = 'selecting';
     await refreshAndRebalance(session);
 
