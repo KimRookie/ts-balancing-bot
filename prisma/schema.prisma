@@ -1,0 +1,32 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Player {
+  id        Int      @id @default(autoincrement())
+  discordId String   @unique  // 디스코드 고유 계정 ID (보안용)
+  nickname  String   @unique  // 소환사 닉네임 (화면 표시용)
+  score     Int      @default(0)
+  wins      Int      @default(0)
+  losses    Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  matchWins  Match[] @relation("WinnerPlayers")
+  matchLoses Match[] @relation("LoserPlayers")
+}
+
+model Match {
+  id        Int      @id @default(autoincrement())
+  guildId   String
+  mode      String
+  createdAt DateTime @default(now())
+
+  winnerPlayers Player[] @relation("WinnerPlayers")
+  loserPlayers  Player[] @relation("LoserPlayers")
+}
