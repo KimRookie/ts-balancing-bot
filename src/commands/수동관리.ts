@@ -1,6 +1,6 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, AutocompleteInteraction } from 'discord.js';
 import { sessions, refreshAndRebalance } from '../lib/utils';
-import { balanceTeams, laneBalance } from '../lib/balancing';
+import { balanceTeams, laneBalance, POSITIONS } from '../lib/balancing';
 import { buildComboEmbed, buildJoinEmbed } from '../lib/embeds';
 import prisma from '../lib/db';
 
@@ -13,6 +13,18 @@ export const addPlayerManualCommand = {
         .setDescription('추가할 선수의 닉네임 (입력 시 자동완성)')
         .setRequired(true)
         .setAutocomplete(true)
+    )
+    .addStringOption(opt =>
+      opt.setName('라인')
+        .setDescription('라인고정 모드일 경우 필수 입력')
+        .setRequired(false)
+        .addChoices(
+          { name: '탑', value: '탑' },
+          { name: '정글', value: '정글' },
+          { name: '미드', value: '미드' },
+          { name: '원딜', value: '원딜' },
+          { name: '서폿', value: '서폿' },
+        )
     ),
 
   async autocomplete(interaction: AutocompleteInteraction) {
@@ -40,6 +52,7 @@ export const addPlayerManualCommand = {
     }
 
     const inputName = interaction.options.getString('닉네임', true);
+    const lane = interaction.options.getString('라인');
 
     if (session.players.some((p: any) => p.nickname === inputName)) {
       return interaction.reply({ content: `❌ **${inputName}** 선수는 이미 참가 중입니다.`, ephemeral: true });
@@ -50,13 +63,38 @@ export const addPlayerManualCommand = {
       return interaction.reply({ content: `❌ **${inputName}** 선수가 DB에 없습니다.`, ephemeral: true });
     }
 
-    session.players.push({ discordId: player.discordId, nickname: player.nickname, score: player.score });
+    if (session.mode === '라인고정') {
+      if (!lane) {
+        return interaction.reply({ content: '❌ 라인고정 모드에서는 반드시 라인을 지정해야 합니다.', ephemeral: true });
+      }
+      
+      const countInLane = session.players.filter((p: any) => p.lane === lane).length;
+      if (countInLane >= 2) {
+        return interaction.reply({ content: `❌ **${lane}** 포지션은 이미 2명이 꽉 찼습니다.`, ephemeral: true });
+      }
+
+      session.players.push({ discordId: player.discordId, nickname: player.nickname, score: player.score, lane: lane });
+    } else {
+      session.players.push({ discordId: player.discordId, nickname: player.nickname, score: player.score });
+    }
 
     if (session.players.length === 10) {
       session.phase = 'selecting';
-      const names = session.players.map((p: any) => p.nickname);
-      const scores = session.players.map((p: any) => p.score);
-      session.combos = session.mode === '라인고정' ? laneBalance(names, scores) : balanceTeams(names, scores);
+      
+      if (session.mode === '라인고정') {
+        const orderedNames: string[] = [];
+        const orderedScores: number[] = [];
+        POSITIONS.forEach(pos => {
+          const p = session.players.filter((x: any) => x.lane === pos);
+          if (p[0]) { orderedNames.push(p[0].nickname); orderedScores.push(p[0].score); }
+          if (p[1]) { orderedNames.push(p[1].nickname); orderedScores.push(p[1].score); }
+        });
+        session.combos = laneBalance(orderedNames, orderedScores);
+      } else {
+        const names = session.players.map((p: any) => p.nickname);
+        const scores = session.players.map((p: any) => p.score);
+        session.combos = balanceTeams(names, scores);
+      }
 
       await interaction.reply({ content: `✅ **${inputName}** 선수를 추가하여 10명이 완료되었습니다.`, ephemeral: true });
       
@@ -230,7 +268,12 @@ export const changePlayerCommand = {
       return interaction.reply({ content: `❌ **${inName}** 선수는 이미 참가 중입니다.`, ephemeral: true });
     }
 
-    session.players[outIdx] = { discordId: newPlayer.discordId, nickname: newPlayer.nickname, score: newPlayer.score };
+    session.players[outIdx] = { 
+      ...session.players[outIdx], 
+      discordId: newPlayer.discordId, 
+      nickname: newPlayer.nickname, 
+      score: newPlayer.score 
+    };
     session.phase = 'selecting';
     await refreshAndRebalance(session);
 
@@ -241,10 +284,8 @@ export const changePlayerCommand = {
       if (targetChannel && targetChannel.isTextBased()) {
         const originalMessage = await targetChannel.messages.fetch(session.messageId).catch(() => null);
         if (originalMessage) {
-          // 🚨 기존 결과창에서 버튼 제거하여 박제
           await originalMessage.edit({ components: [] });
 
-          // 🚨 새로운 메시지로 팀 조합 창 전송
           const comboMsg = await (targetChannel as any).send({
             content: `✅ **${outName}** ➔ **${inName}** 교체 완료! 팀 조합을 다시 선택해 주세요.`,
             ...buildComboEmbed(session.combos)

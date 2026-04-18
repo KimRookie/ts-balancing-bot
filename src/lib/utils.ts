@@ -1,5 +1,5 @@
 import prisma from './db';
-import { balanceTeams, laneBalance } from './balancing';
+import { balanceTeams, laneBalance, POSITIONS } from './balancing';
 
 export type GameMode = '밸런스' | '라인고정' | '칼바람';
 
@@ -37,22 +37,40 @@ export function resetSessionTimer(guildId: string) {
   }, 1000 * 60 * 60); // 1시간
 }
 
-export async function refreshAndRebalance(session: GameSession) {
-  const playerNames = session.players.map(p => p.nickname);
+export async function refreshAndRebalance(session: any) {
+  const playerNames = session.players.map((p: any) => p.nickname);
   const latestPlayers = await prisma.player.findMany({ 
     where: { nickname: { in: playerNames } } 
   });
   
-  session.players = session.players.map(p => {
-    const latest = latestPlayers.find(l => l.nickname === p.nickname);
+  // 점수 최신화
+  session.players = session.players.map((p: any) => {
+    const latest = latestPlayers.find((l: any) => l.nickname === p.nickname);
     return latest ? { ...p, score: latest.score } : p;
   });
 
-  const scores = session.players.map(p => p.score);
-  
-  session.combos = session.mode === '라인고정' 
-    ? laneBalance(playerNames, scores) // (참고: 버튼 핸들러에서 이미 라인 순서대로 배열을 정렬해둠)
-    : balanceTeams(playerNames, scores);
+  // 라인고정 모드일 경우 반드시 라인 순서대로 정렬하여 밸런싱
+  if (session.mode === '라인고정') {
+    const orderedNames: string[] = [];
+    const orderedScores: number[] = [];
+    
+    POSITIONS.forEach(pos => {
+      const p = session.players.filter((x: any) => x.lane === pos);
+      if (p[0]) {
+        orderedNames.push(p[0].nickname);
+        orderedScores.push(p[0].score);
+      }
+      if (p[1]) {
+        orderedNames.push(p[1].nickname);
+        orderedScores.push(p[1].score);
+      }
+    });
+    session.combos = laneBalance(orderedNames, orderedScores);
+  } else {
+    // 자유 모드일 경우 기존 로직 유지
+    const scores = session.players.map((p: any) => p.score);
+    session.combos = balanceTeams(playerNames, scores);
+  }
     
   return session;
 }
