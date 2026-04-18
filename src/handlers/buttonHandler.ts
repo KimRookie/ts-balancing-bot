@@ -28,6 +28,11 @@ export async function handleButton(interaction: ButtonInteraction) {
     if (!player) return interaction.reply({ content: `❌ DB에 등록되어 있지 않습니다. /선수등록을 먼저 해주세요.`, ephemeral: true });
     if (session.players.some((p: any) => p.discordId === user.id)) return interaction.reply({ content: '이미 참가하셨습니다.', ephemeral: true });
 
+    // 동시에 클릭해서 10명이 넘어가려 하면 차단!
+    if (session.players.length >= 10) {
+      return interaction.reply({ content: '❌ 이미 10명 정원이 가득 찼습니다.', ephemeral: true });
+    }
+
     session.players.push({ discordId: player.discordId, nickname: player.nickname, score: player.score });
     await checkAndProceedSelecting(interaction, session);
     return;

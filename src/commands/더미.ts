@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
 import { sessions } from '../lib/utils';
 import { buildJoinEmbed } from '../lib/embeds';
+import { POSITIONS } from '../lib/balancing'; // 🚨 라인 정보를 가져오기 위해 추가
 import prisma from '../lib/db';
 
 module.exports = {
@@ -25,10 +26,8 @@ module.exports = {
       return interaction.reply({ content: '이미 팀 선택이 완료된 세션입니다.', ephemeral: true });
     }
 
-    // 🚨 새 임베드를 띄우지 않도록, 관리자 본인에게만 보이는 생각중(deferReply) 띄우기
     await interaction.deferReply({ ephemeral: true });
 
-    // 더미 데이터 초기값 (discordId 제거됨)
     const dummyData = [
       { nickname: '봇아이언', score: 0 },
       { nickname: '봇브론즈', score: 400 },
@@ -46,13 +45,7 @@ module.exports = {
         await prisma.player.upsert({
           where: { nickname: d.nickname },
           update: {}, 
-          create: {
-            discordId: "bot_" + d.nickname,
-            nickname: d.nickname,
-            score: d.score,
-            wins: 0,
-            losses: 0,
-          },
+          create: { discordId: "bot_" + d.nickname, nickname: d.nickname, score: d.score, wins: 0, losses: 0 },
         });
       }
     } catch (err) {
@@ -63,20 +56,37 @@ module.exports = {
       where: { nickname: { in: dummyData.map(d => d.nickname) } }
     });
 
-    const spaceLeft = 9 - session.players.length;
+    const spaceLeft = 10 - session.players.length; // 9가 아닌 10에서 빼도록 수정
     if (spaceLeft <= 0) {
-      return interaction.editReply({ content: '이미 9명 이상의 유저가 있습니다.' });
+      return interaction.editReply({ content: '이미 10명의 유저가 있습니다.' });
     }
 
-    const dummiesToAdd = dbDummies.slice(0, spaceLeft).map(p => ({
-      discordId: p.discordId,
-      nickname: p.nickname,
-      score: p.score
-    }));
+    // 🚨 더미 데이터 생성 시 라인고정 모드라면 빈 라인을 찾아 할당
+    let addedCount = 0;
+    
+    for (const p of dbDummies) {
+      if (addedCount >= spaceLeft || addedCount >= 9) break; // 최대 9명 또는 남은 자리만큼만
 
-    session.players.push(...dummiesToAdd);
+      const dummyPlayer: any = { discordId: p.discordId, nickname: p.nickname, score: p.score };
 
-    // 🚨 원본 모집글(상단에 있는 메시지)을 찾아가서 그곳을 업데이트합니다.
+      if (session.mode === '라인고정') {
+        // 현재 각 라인별로 몇 명 있는지 계산해서 빈 자리(2명 미만)를 찾음
+        const emptyLane = POSITIONS.find(pos => {
+          const count = session.players.filter((x: any) => x.lane === pos).length;
+          return count < 2;
+        });
+        
+        if (emptyLane) {
+          dummyPlayer.lane = emptyLane;
+        } else {
+          continue; // 모든 라인이 꽉 찼다면 더미 추가 중단
+        }
+      }
+
+      session.players.push(dummyPlayer);
+      addedCount++;
+    }
+
     if (session.messageId && session.channelId) {
       const targetChannel = await interaction.client.channels.fetch(session.channelId).catch(() => null);
       if (targetChannel && targetChannel.isTextBased()) {
@@ -87,9 +97,10 @@ module.exports = {
       }
     }
 
-    // 🚨 도배를 막기 위해, 관리자에게 짧은 성공 텍스트만 출력합니다.
+    // 10명이 꽉 찼다면 UI에 10명이 되었다고 업데이트만 해두고, 실제 밸런싱 시작은 누군가 버튼을 누를 때까지 기다리거나 여기서 강제 트리거하지 않도록 두는 것이 안전합니다 (버튼 핸들러와의 충돌 방지)
+
     await interaction.editReply({
-      content: '✅ 더미 봇 9명이 추가되었습니다.',
+      content: `✅ 더미 봇 ${addedCount}명이 추가되었습니다. (현재 인원: ${session.players.length}명)`,
     });
   },
 };
