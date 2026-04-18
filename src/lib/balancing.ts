@@ -34,6 +34,16 @@ export function balanceTeams(
   fixedPlayer1?: number,
   fixedPlayer2?: number,
 ): TeamCombo[] {
+  // 🚨 버그 3, 5 방어: 정확히 10명이 아니거나 빈 데이터(undefined)가 하나라도 포함된 경우 즉시 차단
+  if (names.length !== 10 || scores.length !== 10 || names.some(n => !n)) {
+    console.error('[Error] balanceTeams: 비정상적인 데이터가 유입되었습니다. 10명이 아니거나 undefined가 포함되어 있습니다.', { 
+      namesLength: names.length, 
+      scoresLength: scores.length, 
+      names 
+    });
+    return [];
+  }
+
   const indices = Array.from({ length: 10 }, (_, i) => i);
   const allCombos = combinations(indices, 5);
   const validCombos: TeamCombo[] = [];
@@ -61,7 +71,7 @@ export function balanceTeams(
     });
   }
 
-  // 🚨 점수 차이(diff) 기준 오름차순 정렬 후 상위 항목만 반환
+  // 점수 차이(diff) 기준 오름차순 정렬 후 상위 항목만 반환
   return validCombos.sort((a, b) => a.diff - b.diff).slice(0, MAX_COMBOS);
 }
 
@@ -69,6 +79,16 @@ export function balanceTeams(
 // 라인고정 밸런싱 (포지션별 2^5 완전탐색 후 최상위 정렬)
 // ────────────────────────────────────────────
 export function laneBalance(names: string[], scores: number[]): TeamCombo[] {
+  // 🚨 버그 3, 5 방어: 정확히 10명이 아니거나 빈 데이터(undefined)가 하나라도 포함된 경우 즉시 차단
+  if (names.length !== 10 || scores.length !== 10 || names.some(n => !n)) {
+    console.error('[Error] laneBalance: 비정상적인 데이터가 유입되었습니다. 10명이 아니거나 undefined가 포함되어 있습니다.', { 
+      namesLength: names.length, 
+      scoresLength: scores.length, 
+      names 
+    });
+    return [];
+  }
+
   const positions: [string, string][] = [];
   for (let i = 0; i < names.length; i += 2) {
     positions.push([names[i], names[i + 1]]);
@@ -85,7 +105,6 @@ export function laneBalance(names: string[], scores: number[]): TeamCombo[] {
     const team2: string[] = [];
 
     positions.forEach(([p1, p2], posIdx) => {
-      // 비트마스킹으로 2명의 위치를 스위칭
       if ((mask >> posIdx) & 1) {
         team1.push(p1); team2.push(p2);
       } else {
@@ -100,6 +119,6 @@ export function laneBalance(names: string[], scores: number[]): TeamCombo[] {
     allCombos.push({ team1, team2, team1Score, team2Score, diff });
   }
 
-  // 🚨 점수 차이 기준 오름차순 정렬 후 상위 항목만 반환
+  // 점수 차이 기준 오름차순 정렬 후 상위 항목만 반환
   return allCombos.sort((a, b) => a.diff - b.diff).slice(0, MAX_COMBOS);
 }

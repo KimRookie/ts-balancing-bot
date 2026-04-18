@@ -22,23 +22,26 @@ export function tierToScore(tier: string): number | null {
     normalized = '다이아' + lastChar;
   } else if (['마', '그', '챌', '첼'].includes(cut)) {
     let number = '0';
-    try {
-      const masterCut = tier[tier.length - 3];
-      if (['마', '스', '터'].includes(masterCut)) {
+    
+    // 🚨 버그 4 해결: 짧은 약어 및 명시적 티어명을 최상단에서 직접 처리하여 예외 발생 원천 차단
+    if (tier === '그마' || tier === '그랜드마스터') {
+      number = '5';
+    } else if (tier === '마' || tier === '마스터') {
+      number = '0';
+    } else if (tier === '챌' || tier === '첼' || tier === '챌린저' || tier === '첼린저') {
+      number = '8';
+    } else {
+      // 기존 "마스터100점" 형태 파싱 (문자열 길이가 충분할 때만 작동하도록 안전하게 처리)
+      const len = tier.length;
+      const masterCut = len >= 3 ? tier[len - 3] : undefined;
+
+      if (masterCut && ['마', '스', '터'].includes(masterCut)) {
         number = '0';
-      } else if (['챌', '첼'].includes(cut) && (tier.length === 5 || tier.length === 7)) {
-        number = '9'; 
-      } else {
+      } else if (['챌', '첼'].includes(cut) && (len === 5 || len === 7)) {
+        number = '9';
+      } else if (masterCut !== undefined && !isNaN(Number(masterCut))) {
         number = masterCut;
-      }
-    } catch {
-      if (tier[tier.length - 1] === '마') {
-        number = '0';
-      } else if (cut === '그' && tier.length === 2) {
-        number = '5';
-      } else if (['챌', '첼'].includes(cut) && tier.length === 1) {
-        number = '8';
-      } else if (tier[tier.length - 2] === '마') {
+      } else if (tier[len - 1] === '마' || (len >= 2 && tier[len - 2] === '마')) {
         number = '0';
       }
     }

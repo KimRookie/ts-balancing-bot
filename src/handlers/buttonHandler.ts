@@ -11,6 +11,10 @@ export async function handleButton(interaction: ButtonInteraction) {
   const session = sessions.get(guildId);
   if (!session) return interaction.reply({ content: '진행 중인 내전이 없습니다.', ephemeral: true });
 
+  if (session.messageId && interaction.message.id !== session.messageId) {
+    return interaction.reply({ content: '❌ 만료된 메시지의 버튼입니다. 최신 메시지를 이용해 주세요.', ephemeral: true });
+  }
+
   resetSessionTimer(guildId);
 
   if (session.isProcessing) {
@@ -21,7 +25,7 @@ export async function handleButton(interaction: ButtonInteraction) {
 
   if (customId === 'join_game') {
     if (session.phase !== 'joining') return interaction.reply({ content: '모집 단계가 아닙니다.', ephemeral: true });
-    if (!player) return interaction.reply({ content: `❌ DB에 등록되어 있지 않습니다. \`/선수등록\`을 먼저 해주세요.`, ephemeral: true });
+    if (!player) return interaction.reply({ content: `❌ DB에 등록되어 있지 않습니다. /선수등록을 먼저 해주세요.`, ephemeral: true });
     if (session.players.some((p: any) => p.discordId === user.id)) return interaction.reply({ content: '이미 참가하셨습니다.', ephemeral: true });
 
     session.players.push({ discordId: player.discordId, nickname: player.nickname, score: player.score });
@@ -32,9 +36,14 @@ export async function handleButton(interaction: ButtonInteraction) {
   const laneMatch = customId.match(/^join_lane_(.+)$/);
   if (laneMatch) {
     if (session.phase !== 'joining') return interaction.reply({ content: '모집 단계가 아닙니다.', ephemeral: true });
-    if (!player) return interaction.reply({ content: `❌ DB에 등록되어 있지 않습니다. \`/선수등록\`을 먼저 해주세요.`, ephemeral: true });
+    if (!player) return interaction.reply({ content: `❌ DB에 등록되어 있지 않습니다. /선수등록을 먼저 해주세요.`, ephemeral: true });
     
     const targetLane = laneMatch[1];
+    
+    const laneCount = session.players.filter((p: any) => p.lane === targetLane && p.discordId !== user.id).length;
+    if (laneCount >= 2) {
+      return interaction.reply({ content: `❌ **${targetLane}** 포지션은 이미 2명이 꽉 찼습니다.`, ephemeral: true });
+    }
     
     const existingIndex = session.players.findIndex((p: any) => p.discordId === user.id);
     if (existingIndex !== -1) {
@@ -147,7 +156,9 @@ export async function handleButton(interaction: ButtonInteraction) {
   }
 
   if (customId === 'rematch') {
-    if (session.phase !== 'post_match') return;
+    if (session.phase !== 'post_match') {
+      return interaction.reply({ content: '❌ 현재 재경기를 진행할 수 없는 상태입니다.', ephemeral: true });
+    }
     await interaction.update({ components: [] });
     session.phase = 'result'; 
     const comboIdx = session.combos.indexOf(session.selectedCombo!);
@@ -179,6 +190,25 @@ export async function handleButton(interaction: ButtonInteraction) {
 
 async function checkAndProceedSelecting(interaction: ButtonInteraction, session: any) {
   if (session.players.length === 10) {
+    if (session.mode === '라인고정') {
+      let isError = false;
+      let errorLane = '';
+      for (const pos of POSITIONS) {
+        if (session.players.filter((x: any) => x.lane === pos).length !== 2) {
+          isError = true;
+          errorLane = pos;
+          break;
+        }
+      }
+
+      if (isError) {
+        return interaction.reply({ 
+          content: `⚠️ 포지션 배정 오류: **${errorLane}** 포지션의 인원이 맞지 않아 밸런싱을 진행할 수 없습니다. 관리자가 수동으로 인원을 조정해 주세요.`, 
+          ephemeral: true 
+        });
+      }
+    }
+
     session.phase = 'selecting';
     
     if (session.mode === '라인고정') {

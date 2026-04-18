@@ -9,6 +9,11 @@ module.exports = {
     .setDescription('테스트용 더미 봇 9명을 DB에 등록하고 참가시킵니다 (개발자 전용)'),
 
   async execute(interaction: ChatInputCommandInteraction) {
+    const member = interaction.member as any;
+    if (!member?.permissions.has('Administrator')) {
+      return interaction.reply({ content: '관리자만 사용할 수 있습니다.', ephemeral: true });
+    }
+
     const guildId = interaction.guildId!;
     const session = sessions.get(guildId);
 
