@@ -29,12 +29,15 @@ export const sessions = new Map<string, GameSession>();
 export function resetSessionTimer(guildId: string) {
   const session = sessions.get(guildId);
   if (!session) return;
-  
-  if (session.timeoutId) clearTimeout(session.timeoutId);
+
+  if (session.timeoutId) {
+    clearTimeout(session.timeoutId);
+  }
+
+  // 타임아웃 시간을 3시간(3 * 60 * 60 * 1000)으로 연장
   session.timeoutId = setTimeout(() => {
     sessions.delete(guildId);
-    console.log(`[알림] ${guildId} 서버의 방치된 세션이 자동 삭제되었습니다.`);
-  }, 1000 * 60 * 60); // 1시간
+  }, 3 * 60 * 60 * 1000);
 }
 
 export async function refreshAndRebalance(session: any) {
