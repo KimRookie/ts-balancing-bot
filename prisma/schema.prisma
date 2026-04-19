@@ -8,9 +8,7 @@ datasource db {
 }
 
 model Player {
-  id        Int      @id @default(autoincrement())
-  discordId String   @unique  // 디스코드 고유 계정 ID (보안용)
-  nickname  String   @unique  // 소환사 닉네임 (화면 표시용)
+  nickname  String   @id
   score     Int      @default(0)
   wins      Int      @default(0)
   losses    Int      @default(0)
@@ -23,10 +21,8 @@ model Player {
 
 model Match {
   id        Int      @id @default(autoincrement())
-  guildId   String
-  mode      String
-  createdAt DateTime @default(now())
+  timestamp DateTime @default(now())
 
-  winnerPlayers Player[] @relation("WinnerPlayers")
-  loserPlayers  Player[] @relation("LoserPlayers")
+  winners    Player[] @relation("WinnerPlayers")
+  losers     Player[] @relation("LoserPlayers")
 }

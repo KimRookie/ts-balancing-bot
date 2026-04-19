@@ -73,9 +73,11 @@ export const addPlayerManualCommand = {
         return interaction.reply({ content: `❌ **${lane}** 포지션은 이미 2명이 꽉 찼습니다.`, ephemeral: true });
       }
 
-      session.players.push({ discordId: player.discordId, nickname: player.nickname, score: player.score, lane: lane });
+      // 🚨 수정: discordId 제거
+      session.players.push({ nickname: player.nickname, score: player.score, lane: lane });
     } else {
-      session.players.push({ discordId: player.discordId, nickname: player.nickname, score: player.score });
+      // 🚨 수정: discordId 제거
+      session.players.push({ nickname: player.nickname, score: player.score });
     }
 
     if (session.players.length === 10) {
@@ -103,11 +105,11 @@ export const addPlayerManualCommand = {
         if (targetChannel && targetChannel.isTextBased()) {
           const originalMessage = await targetChannel.messages.fetch(session.messageId).catch(() => null);
           if (originalMessage) {
-            await originalMessage.edit(buildJoinEmbed(session));
+            await originalMessage.edit(buildJoinEmbed(session) as any);
 
             const comboMsg = await (targetChannel as any).send({ 
               content: '✅ 인원 모집이 완료되어 팀 조합 단계로 넘어갑니다.', 
-              ...buildComboEmbed(session.combos) 
+              ...(buildComboEmbed(session.combos) as any)
             });
             session.messageId = comboMsg.id;
           }
@@ -119,7 +121,7 @@ export const addPlayerManualCommand = {
         const targetChannel = await interaction.client.channels.fetch(session.channelId).catch(() => null);
         if (targetChannel && targetChannel.isTextBased()) {
           const originalMessage = await targetChannel.messages.fetch(session.messageId).catch(() => null);
-          if (originalMessage) await originalMessage.edit(buildJoinEmbed(session));
+          if (originalMessage) await originalMessage.edit(buildJoinEmbed(session) as any);
         }
       }
     }
@@ -182,7 +184,7 @@ export const removePlayerManualCommand = {
       const targetChannel = await interaction.client.channels.fetch(session.channelId).catch(() => null);
       if (targetChannel && targetChannel.isTextBased()) {
         const originalMessage = await targetChannel.messages.fetch(session.messageId).catch(() => null);
-        if (originalMessage) await originalMessage.edit(buildJoinEmbed(session));
+        if (originalMessage) await originalMessage.edit(buildJoinEmbed(session) as any);
       }
     }
   }
@@ -268,9 +270,9 @@ export const changePlayerCommand = {
       return interaction.reply({ content: `❌ **${inName}** 선수는 이미 참가 중입니다.`, ephemeral: true });
     }
 
+    // 🚨 수정: discordId 제거, 기존 데이터 유지
     session.players[outIdx] = { 
       ...session.players[outIdx], 
-      discordId: newPlayer.discordId, 
       nickname: newPlayer.nickname, 
       score: newPlayer.score 
     };
@@ -288,7 +290,7 @@ export const changePlayerCommand = {
 
           const comboMsg = await (targetChannel as any).send({
             content: `✅ **${outName}** ➔ **${inName}** 교체 완료! 팀 조합을 다시 선택해 주세요.`,
-            ...buildComboEmbed(session.combos)
+            ...(buildComboEmbed(session.combos) as any)
           });
           session.messageId = comboMsg.id;
         }

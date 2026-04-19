@@ -4,7 +4,6 @@ import { balanceTeams, laneBalance, POSITIONS } from './balancing';
 export type GameMode = '밸런스' | '라인고정' | '칼바람';
 
 export interface SessionPlayer {
-  discordId: string;
   nickname: string;
   score: number;
   lane?: string; // 라인고정 모드용
@@ -76,4 +75,9 @@ export async function refreshAndRebalance(session: any) {
   }
     
   return session;
+}
+
+export function parseServerNickname(member: any, user: any): string {
+  const full = member?.nickname || user.displayName || user.username;
+  return full.split('/')[0].trim();
 }
