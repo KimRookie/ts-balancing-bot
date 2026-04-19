@@ -21,7 +21,9 @@ model Player {
 
 model Match {
   id        Int      @id @default(autoincrement())
-  timestamp DateTime @default(now())
+  guildId   String
+  mode      String
+  createdAt DateTime @default(now())
 
   winners    Player[] @relation("WinnerPlayers")
   losers     Player[] @relation("LoserPlayers")
