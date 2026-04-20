@@ -17,7 +17,7 @@ export interface GameSession {
   combos: import('./balancing').TeamCombo[];  
   selectedCombo?: import('./balancing').TeamCombo; 
   messageId?: string;             
-  phase: 'joining' | 'selecting' | 'result' | 'post_match';
+  phase: 'joining' | 'selecting' | 'playing' | 'result' | 'post_match';
   isProcessing?: boolean;      // 승패 광클 중복처리 방지 Lock
   timeoutId?: NodeJS.Timeout;  // 메모리 누수 방지용 타이머
 }
