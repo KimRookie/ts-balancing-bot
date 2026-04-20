@@ -91,17 +91,20 @@ export const registerCommand = {
       return interaction.reply({ content: `⚠️ 티어를 인식하지 못했습니다.`, flags: 64 });
     }
 
+    // DB 작업 전에 먼저 응답 예약 (3초 타임아웃 방지)
+    await interaction.deferReply();
+
     try {
       const created = await prisma.player.create({
         data: { nickname, score, wins: 0, losses: 0 },
       });
-      return interaction.reply(`✅ **${nickname}** 선수가 등록되었습니다!\n초기 티어: **${scoreToTierAndLP(created.score)}**`);
+      return interaction.editReply(`✅ **${nickname}** 선수가 등록되었습니다!\n초기 티어: **${scoreToTierAndLP(created.score)}**`);
     } catch (err: any) {
       if (err.code === 'P2002') {
-        return interaction.reply({ content: `이미 등록된 닉네임입니다.`, flags: 64 });
+        return interaction.editReply(`이미 등록된 닉네임입니다.`);
       } else {
-        console.error('선수등록 오류:', err);  // 실제 오류 확인용
-        return interaction.reply({ content: '등록 중 오류가 발생했습니다.', flags: 64 });
+        console.error('선수등록 오류:', err);
+        return interaction.editReply(`등록 중 오류가 발생했습니다.`);
       }
     }
   },
