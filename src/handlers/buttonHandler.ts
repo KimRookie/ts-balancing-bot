@@ -13,7 +13,6 @@ export async function handleButton(interaction: ButtonInteraction) {
     return interaction.reply({ content: '진행 중인 내전이 없습니다. `/내전시작`을 먼저 해주세요.', ephemeral: true });
   }
 
-  // 이전 메시지의 버튼 클릭 원천 차단
   if (session.messageId && message.id !== session.messageId) {
     return interaction.reply({ content: '⚠️ 이전 세션의 버튼입니다. 최신 메시지를 이용해주세요.', ephemeral: true });
   }
@@ -73,16 +72,28 @@ export async function handleButton(interaction: ButtonInteraction) {
 
     const idx = parseInt(customId.replace('select_combo_', ''), 10);
     session.selectedCombo = session.combos[idx];
-    session.phase = 'playing'; // 상태를 플레이 중으로 변경
+    session.phase = 'playing';
 
+    // 🚨 타입 에러 해결 (row를 any로 캐스팅)
+    const disabledComponents = interaction.message.components.map((row: any) => {
+      const newRow = new ActionRowBuilder<ButtonBuilder>();
+      row.components.forEach((btn: any) => newRow.addComponents(ButtonBuilder.from(btn).setDisabled(true)));
+      return newRow;
+    });
+    await interaction.update({ components: disabledComponents });
+
+    // 🚨 타입 에러 해결 (channel을 any로 캐스팅)
     const matchData = buildMatchEmbed(session.selectedCombo, idx, session.mode);
-    await interaction.update({ content: '⚔️ 팀 조합이 확정되었습니다! 게임을 시작하세요.', embeds: matchData.embeds, components: matchData.components });
+    if (interaction.channel) {
+      const matchMsg = await (interaction.channel as any).send({ content: '⚔️ 팀 조합이 확정되었습니다! 게임을 시작하세요.', embeds: matchData.embeds, components: matchData.components });
+      session.messageId = matchMsg.id;
+    }
     return;
   }
 
   if (customId === 'dice_combo') {
     if (session.phase !== 'selecting') return interaction.reply({ content: '모집이 완료되지 않았습니다.', ephemeral: true });
-    session.combos = session.combos.sort(() => Math.random() - 0.5); // 콤보 섞기
+    session.combos = session.combos.sort(() => Math.random() - 0.5);
     const comboData = buildComboEmbed(session.combos);
     await interaction.update({ content: '🎲 주사위를 굴려 조합의 순서를 섞었습니다!', embeds: comboData.embeds, components: comboData.components });
     return;
@@ -93,9 +104,20 @@ export async function handleButton(interaction: ButtonInteraction) {
     if (!memberObj?.permissions.has('Administrator')) return interaction.reply({ content: '관리자만 사용할 수 있습니다.', ephemeral: true });
     
     session.phase = 'selecting';
-    await refreshAndRebalance(session); // utils의 최신화 함수 호출
+    await refreshAndRebalance(session);
     const comboData = buildComboEmbed(session.combos);
-    await interaction.update({ content: '⚖️ 최신 상태를 반영하여 팀을 재조합했습니다.', embeds: comboData.embeds, components: comboData.components });
+    
+    const disabledComponents = interaction.message.components.map((row: any) => {
+      const newRow = new ActionRowBuilder<ButtonBuilder>();
+      row.components.forEach((btn: any) => newRow.addComponents(ButtonBuilder.from(btn).setDisabled(true)));
+      return newRow;
+    });
+    await interaction.update({ components: disabledComponents });
+
+    if (interaction.channel) {
+      const comboMsg = await (interaction.channel as any).send({ content: '⚖️ 최신 상태를 반영하여 팀을 재조합했습니다.', embeds: comboData.embeds, components: comboData.components });
+      session.messageId = comboMsg.id;
+    }
     return;
   }
 
@@ -112,11 +134,15 @@ export async function handleButton(interaction: ButtonInteraction) {
     if ((session.phase as any) !== 'playing') return interaction.reply({ content: '진행 중인 게임이 없습니다.', ephemeral: true });
     if (!session.selectedCombo) return interaction.reply({ content: '선택된 팀 조합이 없습니다.', ephemeral: true });
 
-    // 🚨 다중 클릭 방지 (DB 중복 저장 방어)
     if (session.isProcessing) return interaction.reply({ content: '⏳ 결과 저장 중입니다...', ephemeral: true });
     session.isProcessing = true;
 
-    await interaction.deferUpdate();
+    const disabledComponents = interaction.message.components.map((row: any) => {
+      const newRow = new ActionRowBuilder<ButtonBuilder>();
+      row.components.forEach((btn: any) => newRow.addComponents(ButtonBuilder.from(btn).setDisabled(true)));
+      return newRow;
+    });
+    await interaction.update({ components: disabledComponents });
 
     const isTeam1Win = customId === 'win_team1';
     const winners = isTeam1Win ? session.selectedCombo.team1 : session.selectedCombo.team2;
@@ -125,37 +151,32 @@ export async function handleButton(interaction: ButtonInteraction) {
     try {
       await prisma.match.create({
         data: {
-          guildId,
-          mode: session.mode,
+          guildId, mode: session.mode,
           winners: { connect: winners.map((n: string) => ({ nickname: n })) },
           losers: { connect: losers.map((n: string) => ({ nickname: n })) }
         }
       });
 
-      for (const nick of winners) {
-        await prisma.player.update({ where: { nickname: nick }, data: { score: { increment: 20 }, wins: { increment: 1 } } });
-      }
-      for (const nick of losers) {
-        await prisma.player.update({ where: { nickname: nick }, data: { score: { decrement: 20 }, losses: { increment: 1 } } });
-      }
+      for (const nick of winners) await prisma.player.update({ where: { nickname: nick }, data: { score: { increment: 20 }, wins: { increment: 1 } } });
+      for (const nick of losers) await prisma.player.update({ where: { nickname: nick }, data: { score: { decrement: 20 }, losses: { increment: 1 } } });
 
-      // 결과 출력을 위해 업데이트된 최신 점수 불러오기
       const updatedPlayers = await prisma.player.findMany({ where: { nickname: { in: [...winners, ...losers] } } });
       const winData = winners.map((n: string) => updatedPlayers.find((p: any) => p.nickname === n) || { nickname: n, score: 0 });
       const loseData = losers.map((n: string) => updatedPlayers.find((p: any) => p.nickname === n) || { nickname: n, score: 0 });
 
-      // 🚨 세션을 지우지 않고 상태를 post_match로 넘겨서 재경기/재조합 가능하게 유지
       session.phase = 'post_match';
       const resultData = buildResultEmbed(winData, loseData);
       
-      await interaction.message.edit({ 
-        content: `🎉 **${isTeam1Win ? '1팀' : '2팀'} 승리!** 결과가 안전하게 저장되었습니다.`, 
-        embeds: resultData.embeds, 
-        components: resultData.components 
-      });
+      if (interaction.channel) {
+        const resultMsg = await (interaction.channel as any).send({ 
+          content: `🎉 **${isTeam1Win ? '1팀' : '2팀'} 승리!** 결과가 안전하게 저장되었습니다.`, 
+          embeds: resultData.embeds, components: resultData.components 
+        });
+        session.messageId = resultMsg.id;
+      }
     } catch (error) {
       console.error(error);
-      await interaction.followUp({ content: '❌ 결과 저장 중 오류가 발생했습니다.', ephemeral: true });
+      if (interaction.channel) await (interaction.channel as any).send('❌ 결과 저장 중 오류가 발생했습니다.');
     } finally {
       session.isProcessing = false;
     }
@@ -173,9 +194,18 @@ export async function handleButton(interaction: ButtonInteraction) {
     session.selectedCombo = undefined;
     session.combos = [];
     
-    // 라인 정보는 유지한 채로 점수만 갱신된 상태로 로비 복귀
+    const disabledComponents = interaction.message.components.map((row: any) => {
+      const newRow = new ActionRowBuilder<ButtonBuilder>();
+      row.components.forEach((btn: any) => newRow.addComponents(ButtonBuilder.from(btn).setDisabled(true)));
+      return newRow;
+    });
+    await interaction.update({ components: disabledComponents });
+
     const joinData = buildJoinEmbed(session);
-    await interaction.update({ content: '🔄 로비로 돌아왔습니다. 멤버를 재구성하거나 재경기를 시작하세요!', embeds: joinData.embeds, components: joinData.components });
+    if (interaction.channel) {
+      const joinMsg = await (interaction.channel as any).send({ content: '🔄 로비로 돌아왔습니다. 멤버를 재구성하거나 재경기를 시작하세요!', embeds: joinData.embeds, components: joinData.components });
+      session.messageId = joinMsg.id;
+    }
     return;
   }
 
@@ -184,15 +214,20 @@ export async function handleButton(interaction: ButtonInteraction) {
     if (!memberObj?.permissions.has('Administrator')) return interaction.reply({ content: '관리자만 내전을 종료할 수 있습니다.', ephemeral: true });
     
     sessions.delete(guildId);
-    await interaction.update({ content: '🛑 내전 세션이 완전히 종료되었습니다. 수고하셨습니다!', embeds: [], components: [] });
+    
+    const disabledComponents = interaction.message.components.map((row: any) => {
+      const newRow = new ActionRowBuilder<ButtonBuilder>();
+      row.components.forEach((btn: any) => newRow.addComponents(ButtonBuilder.from(btn).setDisabled(true)));
+      return newRow;
+    });
+    await interaction.update({ content: '🛑 내전 세션이 완전히 종료되었습니다. 수고하셨습니다!', components: disabledComponents });
     return;
   }
 }
 
-// ────────────────────────────────────────────
-// 헬퍼 함수
-// ────────────────────────────────────────────
 async function checkAndProceedSelecting(interaction: ButtonInteraction, session: any) {
+  const joinData = buildJoinEmbed(session);
+
   if (session.players.length === 10) {
     session.phase = 'selecting';
     const names = session.players.map((p: any) => p.nickname);
@@ -220,13 +255,27 @@ async function checkAndProceedSelecting(interaction: ButtonInteraction, session:
     session.combos = combos;
     const comboData = buildComboEmbed(combos);
     
-    await interaction.update({
-      content: '✅ 10명 참가 완료! 아래에서 팀 조합을 선택해 주세요.',
-      embeds: comboData.embeds,
-      components: comboData.components
+    const disabledComponents = joinData.components.map((row: any) => {
+      const newRow = new ActionRowBuilder<ButtonBuilder>();
+      row.components.forEach((btn: any) => newRow.addComponents(ButtonBuilder.from(btn).setDisabled(true)));
+      return newRow;
     });
+
+    await interaction.update({
+      content: '✅ 10명 참가 완료!',
+      embeds: joinData.embeds,
+      components: disabledComponents
+    });
+
+    if (interaction.channel) {
+      const comboMsg = await (interaction.channel as any).send({
+        content: '아래에서 팀 조합을 선택해 주세요.',
+        embeds: comboData.embeds,
+        components: comboData.components
+      });
+      session.messageId = comboMsg.id;
+    }
   } else {
-    const joinData = buildJoinEmbed(session);
     await interaction.update({ embeds: joinData.embeds, components: joinData.components });
   }
 }

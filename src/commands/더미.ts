@@ -1,7 +1,7 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, ActionRowBuilder, ButtonBuilder } from 'discord.js';
 import { sessions, SessionPlayer } from '../lib/utils';
-import { buildJoinEmbed } from '../lib/embeds';
-import { POSITIONS } from '../lib/balancing';
+import { buildJoinEmbed, buildComboEmbed } from '../lib/embeds';
+import { balanceTeams, laneBalance, POSITIONS } from '../lib/balancing';
 import prisma from '../lib/db';
 
 module.exports = {
@@ -40,7 +40,6 @@ module.exports = {
         await prisma.player.upsert({
           where: { nickname: d.nickname },
           update: {}, 
-          // 🚨 discordId 찌꺼기 완벽 제거
           create: { nickname: d.nickname, score: d.score, wins: 0, losses: 0 },
         });
       }
@@ -79,12 +78,59 @@ module.exports = {
       addedCount++;
     }
 
+    // 🚨 타입 에러 해결 (any로 명시)
+    const joinData = buildJoinEmbed(session);
+    let disabledJoinComponents: any = undefined;
+
+    if (session.players.length === 10) {
+      session.phase = 'selecting';
+      
+      const names = session.players.map((p: any) => p.nickname);
+      const scores = session.players.map((p: any) => p.score);
+      
+      let combos: any[] = [];
+      if (session.mode === '라인고정') {
+        const orderedNames: string[] = [];
+        const orderedScores: number[] = [];
+        POSITIONS.forEach(pos => {
+          const p = session.players.filter((x: any) => x.lane === pos);
+          if (p[0]) { orderedNames.push(p[0].nickname); orderedScores.push(p[0].score); }
+          if (p[1]) { orderedNames.push(p[1].nickname); orderedScores.push(p[1].score); }
+        });
+        combos = laneBalance(orderedNames, orderedScores);
+      } else {
+        combos = balanceTeams(names, scores);
+      }
+      session.combos = combos;
+
+      disabledJoinComponents = joinData.components.map((row: any) => {
+        const newRow = new ActionRowBuilder<ButtonBuilder>();
+        row.components.forEach((btn: any) => newRow.addComponents(ButtonBuilder.from(btn).setDisabled(true)));
+        return newRow;
+      });
+    }
+
     if (session.messageId && session.channelId) {
       const targetChannel = await interaction.client.channels.fetch(session.channelId).catch(() => null);
       if (targetChannel && targetChannel.isTextBased()) {
         const originalMessage = await targetChannel.messages.fetch(session.messageId).catch(() => null);
-        // @ts-ignore
-        if (originalMessage) await originalMessage.edit({ embeds: [buildJoinEmbed(session)] });
+        
+        if (originalMessage) {
+          await originalMessage.edit({ 
+            embeds: joinData.embeds, 
+            components: disabledJoinComponents || joinData.components 
+          });
+        }
+
+        if (session.phase === 'selecting' && session.combos.length > 0) {
+          const comboData = buildComboEmbed(session.combos);
+          const comboMsg = await (targetChannel as any).send({
+            content: '✅ 10명 참가 완료! 아래에서 팀 조합을 선택해 주세요.',
+            embeds: comboData.embeds,
+            components: comboData.components
+          });
+          session.messageId = comboMsg.id;
+        }
       }
     }
 

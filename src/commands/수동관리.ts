@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, AutocompleteInteraction } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, AutocompleteInteraction, ActionRowBuilder, ButtonBuilder } from 'discord.js';
 import { sessions, refreshAndRebalance } from '../lib/utils';
 import { balanceTeams, laneBalance, POSITIONS } from '../lib/balancing';
 import { buildComboEmbed, buildJoinEmbed } from '../lib/embeds';
@@ -72,13 +72,12 @@ export const addPlayerManualCommand = {
       if (countInLane >= 2) {
         return interaction.reply({ content: `❌ **${lane}** 포지션은 이미 2명이 꽉 찼습니다.`, ephemeral: true });
       }
-
-      // 🚨 수정: discordId 제거
       session.players.push({ nickname: player.nickname, score: player.score, lane: lane });
     } else {
-      // 🚨 수정: discordId 제거
       session.players.push({ nickname: player.nickname, score: player.score });
     }
+
+    await interaction.reply({ content: `✅ **${inputName}** 선수를 추가했습니다.`, ephemeral: true });
 
     if (session.players.length === 10) {
       session.phase = 'selecting';
@@ -98,30 +97,38 @@ export const addPlayerManualCommand = {
         session.combos = balanceTeams(names, scores);
       }
 
-      await interaction.reply({ content: `✅ **${inputName}** 선수를 추가하여 10명이 완료되었습니다.`, ephemeral: true });
-      
       if (session.messageId && session.channelId) {
         const targetChannel = await interaction.client.channels.fetch(session.channelId).catch(() => null);
         if (targetChannel && targetChannel.isTextBased()) {
           const originalMessage = await targetChannel.messages.fetch(session.messageId).catch(() => null);
           if (originalMessage) {
-            await originalMessage.edit(buildJoinEmbed(session) as any);
+            const joinData = buildJoinEmbed(session);
+            const disabledComponents = joinData.components.map((row: any) => {
+              const newRow = new ActionRowBuilder<ButtonBuilder>();
+              row.components.forEach((btn: any) => newRow.addComponents(ButtonBuilder.from(btn).setDisabled(true)));
+              return newRow;
+            });
+            await originalMessage.edit({ embeds: joinData.embeds, components: disabledComponents });
 
+            const comboData = buildComboEmbed(session.combos);
             const comboMsg = await (targetChannel as any).send({ 
-              content: '✅ 인원 모집이 완료되어 팀 조합 단계로 넘어갑니다.', 
-              ...(buildComboEmbed(session.combos) as any)
+              content: '✅ 10명 참가 완료! 아래에서 팀 조합을 선택해 주세요.', 
+              embeds: comboData.embeds,
+              components: comboData.components
             });
             session.messageId = comboMsg.id;
           }
         }
       }
     } else {
-      await interaction.reply({ content: `✅ **${inputName}** 선수를 추가했습니다.`, ephemeral: true });
       if (session.messageId && session.channelId) {
         const targetChannel = await interaction.client.channels.fetch(session.channelId).catch(() => null);
         if (targetChannel && targetChannel.isTextBased()) {
           const originalMessage = await targetChannel.messages.fetch(session.messageId).catch(() => null);
-          if (originalMessage) await originalMessage.edit(buildJoinEmbed(session) as any);
+          if (originalMessage) {
+            const joinData = buildJoinEmbed(session);
+            await originalMessage.edit({ embeds: joinData.embeds, components: joinData.components });
+          }
         }
       }
     }
@@ -184,7 +191,10 @@ export const removePlayerManualCommand = {
       const targetChannel = await interaction.client.channels.fetch(session.channelId).catch(() => null);
       if (targetChannel && targetChannel.isTextBased()) {
         const originalMessage = await targetChannel.messages.fetch(session.messageId).catch(() => null);
-        if (originalMessage) await originalMessage.edit(buildJoinEmbed(session) as any);
+        if (originalMessage) {
+          const joinData = buildJoinEmbed(session);
+          await originalMessage.edit({ embeds: joinData.embeds, components: joinData.components });
+        }
       }
     }
   }
@@ -270,7 +280,6 @@ export const changePlayerCommand = {
       return interaction.reply({ content: `❌ **${inName}** 선수는 이미 참가 중입니다.`, ephemeral: true });
     }
 
-    // 🚨 수정: discordId 제거, 기존 데이터 유지
     session.players[outIdx] = { 
       ...session.players[outIdx], 
       nickname: newPlayer.nickname, 
@@ -286,11 +295,18 @@ export const changePlayerCommand = {
       if (targetChannel && targetChannel.isTextBased()) {
         const originalMessage = await targetChannel.messages.fetch(session.messageId).catch(() => null);
         if (originalMessage) {
-          await originalMessage.edit({ components: [] });
+          const disabledComponents = originalMessage.components.map((row: any) => {
+            const newRow = new ActionRowBuilder<ButtonBuilder>();
+            row.components.forEach((btn: any) => newRow.addComponents(ButtonBuilder.from(btn).setDisabled(true)));
+            return newRow;
+          });
+          await originalMessage.edit({ components: disabledComponents });
 
+          const comboData = buildComboEmbed(session.combos);
           const comboMsg = await (targetChannel as any).send({
             content: `✅ **${outName}** ➔ **${inName}** 교체 완료! 팀 조합을 다시 선택해 주세요.`,
-            ...(buildComboEmbed(session.combos) as any)
+            embeds: comboData.embeds,
+            components: comboData.components
           });
           session.messageId = comboMsg.id;
         }
