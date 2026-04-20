@@ -60,11 +60,15 @@ module.exports = {
       await command.execute(interaction);
     } catch (err) {
       console.error(`커맨드 오류 (/${interaction.commandName}):`, err);
-      const msg = { content: '커맨드 실행 중 오류가 발생했습니다.', ephemeral: true };
-      if (interaction.replied || interaction.deferred) {
-        await interaction.followUp(msg);
-      } else {
-        await interaction.reply(msg);
+      const msg = { content: '커맨드 실행 중 오류가 발생했습니다.', flags: 64 };
+      try {
+        if (interaction.replied || interaction.deferred) {
+          await interaction.followUp(msg);
+        } else {
+          await interaction.reply(msg);
+        }
+      } catch (e) {
+        console.error('에러 응답 실패:', e);  // 크래시 방지
       }
     }
   },
