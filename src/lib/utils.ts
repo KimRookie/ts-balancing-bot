@@ -42,7 +42,7 @@ export function resetSessionTimer(guildId: string) {
 export async function refreshAndRebalance(session: any) {
   const playerNames = session.players.map((p: any) => p.nickname);
   const latestPlayers = await prisma.player.findMany({ 
-    where: { nickname: { in: playerNames } } 
+    where: { guildId: session.guildId, nickname: { in: playerNames } } 
   });
   
   // 점수 최신화

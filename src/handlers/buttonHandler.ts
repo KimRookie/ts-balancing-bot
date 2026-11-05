@@ -18,7 +18,9 @@ export async function handleButton(interaction: ButtonInteraction) {
   }
 
   const serverNickname = parseServerNickname(member, user);
-  const player = await prisma.player.findUnique({ where: { nickname: serverNickname } });
+  const player = await prisma.player.findUnique({
+    where: { guildId_nickname: { guildId, nickname: serverNickname } },
+  });
 
   // ────────────────────────────────────────────
   // 1. 참가 & 취소 버튼 (Joining Phase)
@@ -152,15 +154,27 @@ export async function handleButton(interaction: ButtonInteraction) {
       await prisma.match.create({
         data: {
           guildId, mode: session.mode,
-          winners: { connect: winners.map((n: string) => ({ nickname: n })) },
-          losers: { connect: losers.map((n: string) => ({ nickname: n })) }
+          winners: { connect: winners.map((n: string) => ({ guildId_nickname: { guildId, nickname: n } })) },
+          losers: { connect: losers.map((n: string) => ({ guildId_nickname: { guildId, nickname: n } })) }
         }
       });
 
-      for (const nick of winners) await prisma.player.update({ where: { nickname: nick }, data: { score: { increment: 20 }, wins: { increment: 1 } } });
-      for (const nick of losers) await prisma.player.update({ where: { nickname: nick }, data: { score: { decrement: 20 }, losses: { increment: 1 } } });
+      for (const nick of winners) {
+        await prisma.player.update({
+          where: { guildId_nickname: { guildId, nickname: nick } },
+          data: { score: { increment: 20 }, wins: { increment: 1 } }
+        });
+      }
+      for (const nick of losers) {
+        await prisma.player.update({
+          where: { guildId_nickname: { guildId, nickname: nick } },
+          data: { score: { decrement: 20 }, losses: { increment: 1 } }
+        });
+      }
 
-      const updatedPlayers = await prisma.player.findMany({ where: { nickname: { in: [...winners, ...losers] } } });
+      const updatedPlayers = await prisma.player.findMany({
+        where: { guildId, nickname: { in: [...winners, ...losers] } }
+      });
       const winData = winners.map((n: string) => updatedPlayers.find((p: any) => p.nickname === n) || { nickname: n, score: 0 });
       const loseData = losers.map((n: string) => updatedPlayers.find((p: any) => p.nickname === n) || { nickname: n, score: 0 });
 

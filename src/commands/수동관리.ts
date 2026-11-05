@@ -28,9 +28,10 @@ export const addPlayerManualCommand = {
     ),
 
   async autocomplete(interaction: AutocompleteInteraction) {
+    const guildId = interaction.guildId!;
     const focusedValue = interaction.options.getFocused();
     const players = await prisma.player.findMany({
-      where: { nickname: { contains: focusedValue } },
+      where: { guildId, nickname: { contains: focusedValue } },
       take: 25,
     });
     await interaction.respond(
@@ -58,7 +59,9 @@ export const addPlayerManualCommand = {
       return interaction.reply({ content: `❌ **${inputName}** 선수는 이미 참가 중입니다.`, ephemeral: true });
     }
 
-    const player = await prisma.player.findUnique({ where: { nickname: inputName } });
+    const player = await prisma.player.findUnique({
+      where: { guildId_nickname: { guildId, nickname: inputName } },
+    });
     if (!player) {
       return interaction.reply({ content: `❌ **${inputName}** 선수가 DB에 없습니다.`, ephemeral: true });
     }
@@ -222,7 +225,7 @@ export const changePlayerCommand = {
     const guildId = interaction.guildId!;
     const session = sessions.get(guildId);
 
-    const isAramResult = session?.mode === '칼바람' && session?.phase === 'result';
+    const isAramResult = session?.mode === '칼바람' && (session?.phase === 'playing' || session?.phase === 'result');
     if (!session || (session.phase !== 'post_match' && !isAramResult)) {
       return interaction.respond([]);
     }
@@ -235,7 +238,7 @@ export const changePlayerCommand = {
     } 
     else if (focusedOption.name === '들어오는닉네임') {
       const players = await prisma.player.findMany({
-        where: { nickname: { contains: focusedOption.value } },
+        where: { guildId, nickname: { contains: focusedOption.value } },
         take: 25,
       });
       await interaction.respond(players.map((p: any) => ({ name: p.nickname, value: p.nickname })));
@@ -255,7 +258,7 @@ export const changePlayerCommand = {
       return interaction.reply({ content: '진행 중인 내전 세션이 없습니다.', ephemeral: true });
     }
 
-    const isAramResult = session.mode === '칼바람' && session.phase === 'result';
+    const isAramResult = session.mode === '칼바람' && (session.phase === 'playing' || session.phase === 'result');
     if (session.phase !== 'post_match' && !isAramResult) {
       return interaction.reply({ 
         content: '❌ 선수 변경은 경기가 끝난 후(결과 화면)에만 사용할 수 있습니다.', 
@@ -271,7 +274,9 @@ export const changePlayerCommand = {
       return interaction.reply({ content: `❌ 현재 참가 목록에 **${outName}** 선수가 없습니다.`, ephemeral: true });
     }
 
-    const newPlayer = await prisma.player.findUnique({ where: { nickname: inName } });
+    const newPlayer = await prisma.player.findUnique({
+      where: { guildId_nickname: { guildId, nickname: inName } },
+    });
     if (!newPlayer) {
       return interaction.reply({ content: `❌ **${inName}** 선수가 DB에 등록되어 있지 않습니다.`, ephemeral: true });
     }

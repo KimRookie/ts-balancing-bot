@@ -30,15 +30,20 @@ for (const file of fs.readdirSync(commandsPath).filter(f => f.endsWith('.ts') ||
 
 const rest = new REST().setToken(process.env.DISCORD_TOKEN!);
 const clientId = process.env.CLIENT_ID!;
-const guildId  = process.env.GUILD_ID;
+const guildIds = (process.env.GUILD_ID || '')
+  .split(',')
+  .map(id => id.trim())
+  .filter(Boolean);
 
 (async () => {
   try {
     console.log(`\n🔄 총 ${commands.length}개의 커맨드를 디스코드에 등록합니다...`);
     
-    if (guildId) {
-      await rest.put(Routes.applicationGuildCommands(clientId, guildId), { body: commands });
-      console.log('✅ 서버 등록 완료 (즉시 반영)');
+    if (guildIds.length > 0) {
+      for (const id of guildIds) {
+        await rest.put(Routes.applicationGuildCommands(clientId, id), { body: commands });
+        console.log(`✅ 서버 등록 완료 (Guild ID: ${id}, 즉시 반영)`);
+      }
     } else {
       await rest.put(Routes.applicationCommands(clientId), { body: commands });
       console.log('✅ 글로벌 등록 완료 (최대 1시간 소요)');

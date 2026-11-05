@@ -8,7 +8,9 @@ datasource db {
 }
 
 model Player {
-  nickname  String   @id
+  id        Int      @id @default(autoincrement())
+  guildId   String
+  nickname  String
   score     Int      @default(0)
   wins      Int      @default(0)
   losses    Int      @default(0)
@@ -17,6 +19,8 @@ model Player {
 
   matchWins  Match[] @relation("WinnerPlayers")
   matchLoses Match[] @relation("LoserPlayers")
+
+  @@unique([guildId, nickname])
 }
 
 model Match {

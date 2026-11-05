@@ -38,9 +38,9 @@ module.exports = {
     try {
       for (const d of dummyData) {
         await prisma.player.upsert({
-          where: { nickname: d.nickname },
+          where: { guildId_nickname: { guildId, nickname: d.nickname } },
           update: {}, 
-          create: { nickname: d.nickname, score: d.score, wins: 0, losses: 0 },
+          create: { guildId, nickname: d.nickname, score: d.score, wins: 0, losses: 0 },
         });
       }
     } catch (err) {
@@ -48,7 +48,7 @@ module.exports = {
     }
 
     const dbDummies = await prisma.player.findMany({
-      where: { nickname: { in: dummyData.map(d => d.nickname) } }
+      where: { guildId, nickname: { in: dummyData.map(d => d.nickname) } }
     });
 
     const spaceLeft = 10 - session.players.length;

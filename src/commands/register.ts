@@ -33,7 +33,9 @@ export const rankingCommand = {
     .setDescription('내전 랭킹 TOP 10을 보여줍니다'),
 
   async execute(interaction: ChatInputCommandInteraction) {
+    const guildId = interaction.guildId!;
     const players = await prisma.player.findMany({
+      where: { guildId },
       orderBy: { score: 'desc' },
       take: 10,
     });
@@ -49,12 +51,15 @@ export const statsCommand = {
     .addStringOption(opt => opt.setName('닉네임').setDescription('조회할 닉네임').setRequired(false)),
 
   async execute(interaction: ChatInputCommandInteraction) {
+    const guildId = interaction.guildId!;
     const inputNickname = interaction.options.getString('닉네임');
     
     // 🚨 닉네임 미입력 시 서버 닉네임 헬퍼 함수 사용 (discordId 대체)
     const targetNickname = inputNickname || parseServerNickname(interaction.member, interaction.user);
     
-    const player = await prisma.player.findUnique({ where: { nickname: targetNickname } });
+    const player = await prisma.player.findUnique({
+      where: { guildId_nickname: { guildId, nickname: targetNickname } },
+    });
 
     if (!player) return interaction.reply({ content: `등록된 선수가 아닙니다. (${targetNickname})`, ephemeral: true });
 
@@ -83,6 +88,7 @@ export const registerCommand = {
     .addStringOption(opt => opt.setName('티어').setDescription('현재 티어 (예: 실2, 골1, 다4)').setRequired(true)),
 
   async execute(interaction: ChatInputCommandInteraction) {
+    const guildId = interaction.guildId!;
     const nickname = interaction.options.getString('닉네임', true);
     const tier = interaction.options.getString('티어', true);
     const score = tierToScore(tier);
@@ -96,7 +102,7 @@ export const registerCommand = {
 
     try {
       const created = await prisma.player.create({
-        data: { nickname, score, wins: 0, losses: 0 },
+        data: { guildId, nickname, score, wins: 0, losses: 0 },
       });
       return interaction.editReply(`✅ **${nickname}** 선수가 등록되었습니다!\n초기 티어: **${scoreToTierAndLP(created.score)}**`);
     } catch (err: any) {
@@ -125,6 +131,7 @@ export const updateCommand = {
       return interaction.reply({ content: '❌ 관리자만 선수의 정보를 수정할 수 있습니다.', ephemeral: true });
     }
 
+    const guildId = interaction.guildId!;
     const targetNickname = interaction.options.getString('대상', true);
     const newNickname = interaction.options.getString('새닉네임');
     const newTier = interaction.options.getString('새티어');
@@ -133,18 +140,26 @@ export const updateCommand = {
       return interaction.reply({ content: '변경할 닉네임이나 티어 중 하나는 반드시 입력해 주세요.', ephemeral: true });
     }
 
-    const player = await prisma.player.findUnique({ where: { nickname: targetNickname } });
+    const player = await prisma.player.findUnique({
+      where: { guildId_nickname: { guildId, nickname: targetNickname } },
+    });
     if (!player) return interaction.reply({ content: `선수를 찾을 수 없습니다.`, ephemeral: true });
 
     const updateData: any = {};
     if (newNickname) updateData.nickname = newNickname;
     if (newTier) {
       const score = tierToScore(newTier);
-      if (score !== null) updateData.score = score;
+      if (score === null) {
+        return interaction.reply({ content: '⚠️ 티어를 인식하지 못했습니다.', ephemeral: true });
+      }
+      updateData.score = score;
     }
 
     try {
-      const updated = await prisma.player.update({ where: { nickname: targetNickname }, data: updateData });
+      const updated = await prisma.player.update({
+        where: { guildId_nickname: { guildId, nickname: targetNickname } },
+        data: updateData,
+      });
       await interaction.reply(`✅ 수정 완료!\n➔ 닉네임: **${updated.nickname}** | 티어: **${scoreToTierAndLP(updated.score)}**`);
     } catch (err: any) {
       if (err.code === 'P2002') {
