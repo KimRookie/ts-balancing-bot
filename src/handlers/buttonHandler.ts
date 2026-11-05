@@ -68,16 +68,21 @@ export async function handleButton(interaction: ButtonInteraction) {
   // ────────────────────────────────────────────
   // 2. 조합 선택 및 관리 (Selecting Phase)
   // ────────────────────────────────────────────
-  if (customId.startsWith('select_combo_')) {
+  if (customId.startsWith('select_combo_') || customId === 'dice_combo') {
     if (session.phase !== 'selecting') return interaction.reply({ content: '팀 조합 선택 단계가 아닙니다.', ephemeral: true });
     const memberObj = member as any;
     if (!memberObj?.permissions.has('Administrator')) return interaction.reply({ content: '관리자만 팀을 확정할 수 있습니다.', ephemeral: true });
 
-    const idx = parseInt(customId.replace('select_combo_', ''), 10);
+    const displayCount = Math.min(session.combos.length, 5);
+    const isDice = customId === 'dice_combo';
+    const idx = isDice
+      ? Math.floor(Math.random() * displayCount)
+      : parseInt(customId.replace('select_combo_', ''), 10);
+
     session.selectedCombo = session.combos[idx];
     session.phase = 'playing';
 
-    // 🚨 타입 에러 해결 (row를 any로 캐스팅)
+    // 🚨 타입 에러 해결 (row를 any로 명시)
     const disabledComponents = interaction.message.components.map((row: any) => {
       const newRow = new ActionRowBuilder<ButtonBuilder>();
       row.components.forEach((btn: any) => newRow.addComponents(ButtonBuilder.from(btn).setDisabled(true)));
@@ -88,17 +93,12 @@ export async function handleButton(interaction: ButtonInteraction) {
     // 🚨 타입 에러 해결 (channel을 any로 캐스팅)
     const matchData = buildMatchEmbed(session.selectedCombo, idx, session.mode);
     if (interaction.channel) {
-      const matchMsg = await (interaction.channel as any).send({ content: '⚔️ 팀 조합이 확정되었습니다! 게임을 시작하세요.', embeds: matchData.embeds, components: matchData.components });
+      const msgContent = isDice
+        ? `🎲 주사위를 굴려 **조합 ${idx + 1}**이(가) 확정되었습니다! 게임을 시작하세요.`
+        : '⚔️ 팀 조합이 확정되었습니다! 게임을 시작하세요.';
+      const matchMsg = await (interaction.channel as any).send({ content: msgContent, embeds: matchData.embeds, components: matchData.components });
       session.messageId = matchMsg.id;
     }
-    return;
-  }
-
-  if (customId === 'dice_combo') {
-    if (session.phase !== 'selecting') return interaction.reply({ content: '모집이 완료되지 않았습니다.', ephemeral: true });
-    session.combos = session.combos.sort(() => Math.random() - 0.5);
-    const comboData = buildComboEmbed(session.combos);
-    await interaction.update({ content: '🎲 주사위를 굴려 조합의 순서를 섞었습니다!', embeds: comboData.embeds, components: comboData.components });
     return;
   }
 
