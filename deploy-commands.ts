@@ -38,11 +38,19 @@ const guildIds = (process.env.GUILD_ID || '')
 (async () => {
   try {
     console.log(`\n🔄 총 ${commands.length}개의 커맨드를 디스코드에 등록합니다...`);
-    
-    if (guildIds.length > 0) {
-      for (const id of guildIds) {
+
+    // 봇이 현재 참여 중인 모든 서버 조회 + .env의 GUILD_ID 병합
+    const joinedGuilds = (await rest.get(Routes.userGuilds())) as { id: string; name: string }[];
+    const targetGuildIds = new Set<string>([
+      ...guildIds,
+      ...joinedGuilds.map(g => g.id),
+    ]);
+
+    if (targetGuildIds.size > 0) {
+      for (const id of targetGuildIds) {
+        const guildName = joinedGuilds.find(g => g.id === id)?.name || id;
         await rest.put(Routes.applicationGuildCommands(clientId, id), { body: commands });
-        console.log(`✅ 서버 등록 완료 (Guild ID: ${id}, 즉시 반영)`);
+        console.log(`✅ 서버 등록 완료: ${guildName} (${id}, 즉시 반영)`);
       }
     } else {
       await rest.put(Routes.applicationCommands(clientId), { body: commands });
