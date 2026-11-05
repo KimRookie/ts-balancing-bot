@@ -1,12 +1,56 @@
 /**
- * 한글 티어 약어 → 점수 변환
+ * 한글/영문 티어 약어 → 점수 변환 (대소문자 무관)
+ * 예: I4~D1, M, M200, GM, C / 아, 브, 실2, 골1, 플4, 에3, 다4, 마200, 그마, 챌
  */
 export function tierToScore(tier: string): number | null {
-  const cut = tier[0];
-  const lastChar = tier[tier.length - 1];
-  let normalized = tier;
+  const raw = tier.trim();
+  if (!raw) return null;
 
-  if (cut === '아') {
+  const upper = raw.toUpperCase();
+  const cut = raw[0];
+  const lastChar = raw[raw.length - 1];
+  let normalized = raw;
+
+  // ── 1. 영문 티어 약어 처리 (대소문자 무관) ──
+  const engHighMatch = upper.match(/^(GM|M|C)(\d+)?(?:LP|점)?$/);
+
+  if (/^I[1-4]?$/.test(upper)) {
+    normalized = '아이언';
+  } else if (/^B[1-4]?$/.test(upper)) {
+    normalized = '브론즈';
+  } else if (/^S([1-4])?$/.test(upper)) {
+    const div = upper.slice(1) || '4';
+    normalized = '실버' + div;
+  } else if (/^G([1-4])?$/.test(upper)) {
+    const div = upper.slice(1) || '4';
+    normalized = '골드' + div;
+  } else if (/^P([1-4])?$/.test(upper)) {
+    const div = upper.slice(1) || '4';
+    normalized = '플레티넘' + div;
+  } else if (/^E([1-4])?$/.test(upper)) {
+    const div = upper.slice(1) || '4';
+    normalized = '에메랄드' + div;
+  } else if (/^D([1-4])?$/.test(upper)) {
+    const div = upper.slice(1) || '4';
+    normalized = '다이아' + div;
+  } else if (engHighMatch) {
+    const prefix = engHighMatch[1];
+    const digits = engHighMatch[2];
+    let number = '0';
+
+    if (!digits) {
+      if (prefix === 'M') number = '0';
+      else if (prefix === 'GM') number = '5';
+      else if (prefix === 'C') number = '8';
+    } else {
+      const n = parseInt(digits, 10);
+      const idx = digits.length === 1 ? n : Math.min(9, Math.floor(n / 100));
+      number = String(idx);
+    }
+    normalized = '마/그/챌' + number;
+  }
+  // ── 2. 한글 티어 약어 처리 ──
+  else if (cut === '아') {
     normalized = '아이언';
   } else if (cut === '브') {
     normalized = '브론즈';
@@ -24,25 +68,33 @@ export function tierToScore(tier: string): number | null {
     let number = '0';
     
     // 🚨 버그 4 해결: 짧은 약어 및 명시적 티어명을 최상단에서 직접 처리하여 예외 발생 원천 차단
-    if (tier === '그마' || tier === '그랜드마스터') {
+    if (raw === '그마' || raw === '그랜드마스터') {
       number = '5';
-    } else if (tier === '마' || tier === '마스터') {
+    } else if (raw === '마' || raw === '마스터') {
       number = '0';
-    } else if (tier === '챌' || tier === '첼' || tier === '챌린저' || tier === '첼린저') {
+    } else if (raw === '챌' || raw === '첼' || raw === '챌린저' || raw === '첼린저') {
       number = '8';
     } else {
-      // 기존 "마스터100점" 형태 파싱 (문자열 길이가 충분할 때만 작동하도록 안전하게 처리)
-      const len = tier.length;
-      const masterCut = len >= 3 ? tier[len - 3] : undefined;
+      const digitMatch = raw.match(/(\d+)/);
+      if (digitMatch) {
+        const digits = digitMatch[1];
+        const n = parseInt(digits, 10);
+        const idx = digits.length === 1 ? n : Math.min(9, Math.floor(n / 100));
+        number = String(idx);
+      } else {
+        // 기존 "마스터100점" 형태 파싱 (문자열 길이가 충분할 때만 작동하도록 안전하게 처리)
+        const len = raw.length;
+        const masterCut = len >= 3 ? raw[len - 3] : undefined;
 
-      if (masterCut && ['마', '스', '터'].includes(masterCut)) {
-        number = '0';
-      } else if (['챌', '첼'].includes(cut) && (len === 5 || len === 7)) {
-        number = '9';
-      } else if (masterCut !== undefined && !isNaN(Number(masterCut))) {
-        number = masterCut;
-      } else if (tier[len - 1] === '마' || (len >= 2 && tier[len - 2] === '마')) {
-        number = '0';
+        if (masterCut && ['마', '스', '터'].includes(masterCut)) {
+          number = '0';
+        } else if (['챌', '첼'].includes(cut) && (len === 5 || len === 7)) {
+          number = '9';
+        } else if (masterCut !== undefined && !isNaN(Number(masterCut))) {
+          number = masterCut;
+        } else if (raw[len - 1] === '마' || (len >= 2 && raw[len - 2] === '마')) {
+          number = '0';
+        }
       }
     }
     normalized = '마/그/챌' + number;

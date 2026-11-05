@@ -85,7 +85,7 @@ export const registerCommand = {
     .setName('선수등록')
     .setDescription('내전에 참가할 닉네임과 티어를 등록합니다.')
     .addStringOption(opt => opt.setName('닉네임').setDescription('인게임 소환사명 (서버 닉네임과 동일하게)').setRequired(true))
-    .addStringOption(opt => opt.setName('티어').setDescription('현재 티어 (예: 실2, 골1, 다4)').setRequired(true)),
+    .addStringOption(opt => opt.setName('티어').setDescription('현재 티어 (예: I4~D1, M200, C / 실2, 골1, 다4)').setRequired(true)),
 
   async execute(interaction: ChatInputCommandInteraction) {
     const guildId = interaction.guildId!;
