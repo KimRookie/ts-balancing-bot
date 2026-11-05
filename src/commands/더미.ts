@@ -24,22 +24,22 @@ module.exports = {
     await interaction.deferReply({ ephemeral: true });
 
     const dummyData = [
-      { nickname: '봇아이언', score: 0 },
-      { nickname: '봇브론즈', score: 400 },
-      { nickname: '봇실버', score: 1000 },
-      { nickname: '봇골드', score: 1400 },
-      { nickname: '봇플레', score: 1800 },
-      { nickname: '봇에메1', score: 2000 },
-      { nickname: '봇에메2', score: 2200 },
-      { nickname: '봇다이아', score: 2500 },
-      { nickname: '봇마스터', score: 2920 },
+      { nickname: '봇아이언', score: 700 },
+      { nickname: '봇브론즈', score: 900 },
+      { nickname: '봇실버', score: 1300 },
+      { nickname: '봇골드', score: 1900 },
+      { nickname: '봇플레', score: 2500 },
+      { nickname: '봇에메1', score: 2900 },
+      { nickname: '봇에메2', score: 3300 },
+      { nickname: '봇다이아', score: 4100 },
+      { nickname: '봇마스터', score: 4800 },
     ];
 
     try {
       for (const d of dummyData) {
         await prisma.player.upsert({
           where: { guildId_nickname: { guildId, nickname: d.nickname } },
-          update: {}, 
+          update: { score: d.score }, 
           create: { guildId, nickname: d.nickname, score: d.score, wins: 0, losses: 0 },
         });
       }

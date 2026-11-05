@@ -2,6 +2,7 @@ import { ButtonInteraction, ActionRowBuilder, ButtonBuilder } from 'discord.js';
 import { sessions, parseServerNickname, SessionPlayer, refreshAndRebalance } from '../lib/utils';
 import { buildJoinEmbed, buildResultEmbed, buildComboEmbed, buildMatchEmbed } from '../lib/embeds';
 import { balanceTeams, laneBalance, POSITIONS } from '../lib/balancing';
+import { getScoreAfterWin, getScoreAfterLoss } from '../lib/tierScore';
 import prisma from '../lib/db';
 
 export async function handleButton(interaction: ButtonInteraction) {
@@ -159,16 +160,24 @@ export async function handleButton(interaction: ButtonInteraction) {
         }
       });
 
+      const currentPlayers = await prisma.player.findMany({
+        where: { guildId, nickname: { in: [...winners, ...losers] } },
+      });
+
       for (const nick of winners) {
+        const cur = currentPlayers.find((p: any) => p.nickname === nick);
+        const newScore = getScoreAfterWin(cur ? cur.score : 700);
         await prisma.player.update({
           where: { guildId_nickname: { guildId, nickname: nick } },
-          data: { score: { increment: 20 }, wins: { increment: 1 } }
+          data: { score: newScore, wins: { increment: 1 } }
         });
       }
       for (const nick of losers) {
+        const cur = currentPlayers.find((p: any) => p.nickname === nick);
+        const newScore = getScoreAfterLoss(cur ? cur.score : 700);
         await prisma.player.update({
           where: { guildId_nickname: { guildId, nickname: nick } },
-          data: { score: { decrement: 20 }, losses: { increment: 1 } }
+          data: { score: newScore, losses: { increment: 1 } }
         });
       }
 
